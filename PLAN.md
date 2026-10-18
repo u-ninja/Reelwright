@@ -1,4 +1,4 @@
-# launchreel — build plan
+# Reelwright — build plan
 
 A desktop app that turns a **website URL and/or a text description** into a video of any kind, from a few seconds up to 10+ minutes, — product launch, explainer, announcement, tutorial, event promo, story, social clip — using **whatever AI the user connects**: local Ollama (free, unlimited), or Claude / Gemini / OpenAI through an API key or the user's own installed CLI. Inspired by the MIT-licensed `/brag-slim` skill (github.com/latent-spaces/brag): same creative rules, but the app does the rendering so the AI only has to write a small plan.
 

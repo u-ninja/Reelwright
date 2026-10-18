@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: launchreel
+appId: com.reelwright.app
+productName: reelwright
 directories:
   buildResources: build
 files:
@@ -12,7 +12,7 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: launchreel
+  executableName: reelwright
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

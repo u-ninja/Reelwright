@@ -52,7 +52,7 @@ async function render(): Promise<string> {
     show: false,
     webPreferences: { offscreen: true, backgroundThrottling: false }
   })
-  const out = join(app.getPath('videos'), `launchreel-${Date.now()}.mp4`)
+  const out = join(app.getPath('videos'), `reelwright-${Date.now()}.mp4`)
   let ff: ReturnType<typeof spawn> | undefined
   let log = ''
   try {
@@ -110,7 +110,7 @@ async function render(): Promise<string> {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.reelwright.app')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

@@ -9,7 +9,7 @@ export type Storyboard = { palette: { bg: string; fg: string; accent: string }; 
 export const demo: Storyboard = {
   palette: { bg: '#0b0b10', fg: '#f5f5f7', accent: '#7c5cff' },
   scenes: [
-    { template: 'title', durationSec: 3, headline: 'launchreel' },
+    { template: 'title', durationSec: 3, headline: 'Reelwright' },
     {
       template: 'feature',
       durationSec: 3.5,
