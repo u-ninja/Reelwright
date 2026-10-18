@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMotionValue, useMotionValueEvent } from 'motion/react'
 import { Pause, Play, X } from 'lucide-react'
 import { Player } from './player/Player'
@@ -6,7 +6,7 @@ import { Loader } from './components/Loader'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Chip } from './components/Chip'
-import { type Storyboard, duration, Storyboard as Schema } from '../../shared/schema'
+import { type Storyboard, duration, sceneStarts, Storyboard as Schema } from '../../shared/schema'
 
 const clock = (s: number): string =>
   `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
@@ -26,13 +26,31 @@ export function Preview({
   const [status, setStatus] = useState('')
   useMotionValueEvent(time, 'change', setT)
   const total = duration(sb)
-  const starts = sb.scenes.map((_, i) =>
-    sb.scenes.slice(0, i).reduce((a, s) => a + s.durationSec, 0)
-  )
+  const starts = sceneStarts(sb)
+  const audio = useRef<HTMLAudioElement>(null)
+  const [src, setSrc] = useState<string>()
+
+  // The same mixed soundtrack the render uses (voice + ducked music), as a blob URL.
+  useEffect(() => {
+    let url: string | undefined
+    let alive = true
+    window.electron.ipcRenderer.invoke('soundtrack', sb).then((d: Uint8Array<ArrayBuffer> | null) => {
+      if (alive && d) setSrc((url = URL.createObjectURL(new Blob([d], { type: 'audio/mp4' }))))
+    })
+    return () => {
+      alive = false
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [sb])
 
   useEffect(() => {
     if (!playing) return
     if (time.get() >= total) time.set(0)
+    const a = audio.current
+    if (a && src) {
+      a.currentTime = time.get()
+      void a.play()
+    }
     let last = performance.now()
     let id = requestAnimationFrame(function tick(now) {
       const next = Math.min(total, time.get() + (now - last) / 1000)
@@ -41,8 +59,11 @@ export function Preview({
       if (next < total) id = requestAnimationFrame(tick)
       else setPlaying(false)
     })
-    return () => cancelAnimationFrame(id)
-  }, [playing, total, time])
+    return () => {
+      cancelAnimationFrame(id)
+      a?.pause()
+    }
+  }, [playing, total, time, src])
 
   const render = async (): Promise<void> => {
     setStatus('Rendering…')
@@ -68,6 +89,7 @@ export function Preview({
           }}
         >
           <Player sb={sb} time={time} />
+          <audio ref={audio} src={src} preload="auto" />
         </div>
       </div>
       <div className="flex items-center gap-3">

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  GenerateRequest as Request,
   type GenerateRequest,
   type Storyboard,
   Storyboard as Schema,
@@ -17,6 +18,7 @@ import {
 
 type Msg = { role: 'user' | 'error'; text: string } | { role: 'assistant'; sb: Storyboard }
 const LENGTHS = ['10', '20', '30', '45', '60'] as const
+const VOICES = ['off', ...Request.shape.voice.unwrap().options] as const
 
 // A still frame of the video, used wherever a thumbnail is needed.
 function Thumb({ sb, at = 1.5 }: { sb: Storyboard; at?: number }): React.JSX.Element {
@@ -52,7 +54,8 @@ function App(): React.JSX.Element {
     kind: 'launch',
     tone: 'default',
     format: 'landscape',
-    duration: 20
+    duration: 20,
+    music: true
   })
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -127,7 +130,10 @@ function App(): React.JSX.Element {
           )}
           {busy && (
             <p className="flex items-center gap-3 text-muted-foreground">
-              <Loader label="Writing storyboard" className="text-primary" /> Writing the storyboard…
+              <Loader label="Writing storyboard" className="text-primary" />
+              {opts.voice
+                ? 'Writing the storyboard and recording the voice…'
+                : 'Writing the storyboard…'}
             </p>
           )}
         </div>
@@ -168,6 +174,19 @@ function App(): React.JSX.Element {
               options={LENGTHS}
               format={(o) => `${o}s`}
               onChange={(d) => setOpts({ ...opts, duration: +d })}
+            />
+            <Chip
+              label="Voice"
+              value={opts.voice ?? 'off'}
+              options={VOICES}
+              format={(o) => (o === 'off' ? 'no voice' : `voice: ${o.split('_')[1]}`)}
+              onChange={(v) => setOpts({ ...opts, voice: v === 'off' ? undefined : v })}
+            />
+            <Chip
+              label="Music"
+              value={opts.music ? 'music' : 'no music'}
+              options={['music', 'no music'] as const}
+              onChange={(v) => setOpts({ ...opts, music: v === 'music' })}
             />
             <Button
               type="submit"

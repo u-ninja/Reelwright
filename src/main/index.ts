@@ -1,9 +1,11 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
+import { readFile } from 'fs/promises'
 import { spawn } from 'child_process'
 import { once } from 'events'
 import { FORMATS, GenerateRequest, Storyboard, duration } from '../shared/schema'
 import { generate } from './generate'
+import { FFMPEG, soundtrack } from './audio'
 import { demo } from '../shared/demo'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -43,13 +45,12 @@ function load(win: BrowserWindow, hash = ''): Promise<void> {
   return win.loadFile(join(__dirname, '../renderer/index.html'), { hash })
 }
 
-// shortcut: Homebrew ffmpeg path, bundle ffmpeg in milestone 9.
-const FFMPEG = process.env['FFMPEG'] ?? '/opt/homebrew/bin/ffmpeg'
 const FPS = 30
 
 // Seek the Player frame by frame in an offscreen window and pipe raw frames into ffmpeg.
 async function render(input: unknown): Promise<string> {
   const sb = Storyboard.parse(input)
+  const audio = await soundtrack(sb)
   const [W, H] = FORMATS[sb.format]
   const win = new BrowserWindow({
     width: W,
@@ -86,12 +87,15 @@ async function render(input: unknown): Promise<string> {
           `${FPS}`,
           '-i',
           '-',
+          ...(audio ? ['-i', audio, '-map', '0:v', '-map', '1:a', '-c:a', 'copy'] : []),
           '-vf',
           `scale=${W}:${H}`,
           '-c:v',
           'libx264',
           '-pix_fmt',
           'yuv420p',
+          '-movflags',
+          '+faststart',
           out
         ])
         ff.stderr!.on('data', (d) => (log = (log + d).slice(-2000)))
@@ -128,9 +132,13 @@ app.whenReady().then(() => {
 
   ipcMain.handle('render', (_, sb) => render(sb))
   ipcMain.handle('generate', (_, req) => generate(GenerateRequest.parse(req)))
+  ipcMain.handle('soundtrack', async (_, sb) => {
+    const path = await soundtrack(Storyboard.parse(sb))
+    return path && readFile(path)
+  })
 
   // LR_RENDER=landscape|vertical|square pnpm dev → render the demo, print the path, quit (smoke test).
-  // Add LR_PROMPT="..." (and LR_KIND=explainer) to generate the storyboard with Ollama first; LR_TONE and LR_DURATION set tone and length.
+  // Add LR_PROMPT="..." (and LR_KIND=explainer) to generate the storyboard with Ollama first; LR_TONE, LR_DURATION, LR_VOICE (e.g. af_heart) and LR_MUSIC=0 set tone, length, narration and music.
   const format = process.env['LR_RENDER']
   if (format) {
     const text = process.env['LR_PROMPT']
@@ -142,7 +150,9 @@ app.whenReady().then(() => {
             kind,
             format,
             tone: process.env['LR_TONE'] ?? 'default',
-            duration: +(process.env['LR_DURATION'] ?? 20)
+            duration: +(process.env['LR_DURATION'] ?? 20),
+            voice: process.env['LR_VOICE'],
+            music: process.env['LR_MUSIC'] !== '0'
           })
         )
       : Promise.resolve(demo)

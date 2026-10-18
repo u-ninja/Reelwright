@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { AiScene, AiStoryboard, type GenerateRequest, type Storyboard } from '../../shared/schema'
 import { ollama } from '../providers/ollama'
 import { finalize, inventedNumbers } from './validate'
+import { MUSIC_CREDIT, narrate } from '../audio'
 
 const KINDS: Record<GenerateRequest['kind'], string> = {
   launch: 'Hook → reveal what it is → 2-3 highlights → punchline or CTA.',
@@ -34,6 +35,9 @@ Rules:
   font: "sans" (modern, product, tech), "serif" (editorial, food, culture, luxury, story), "mono" (developer, terminal, data).
 - shareCopy: 1-3 plain sentences for posting the video.`
 
+const NARRATION = `
+- voiceover: one spoken line per scene, conversational, like a creator talking to camera. It adds to the on-screen text instead of reading it out. About 2.5 words per second of scene. Write numbers the way they are spoken.`
+
 // One call constrained to the schema; one retry with the error if the reply still doesn't parse.
 async function ask<T>(schema: z.ZodType<T>, sys: string, user: string): Promise<T> {
   const call = async (u: string): Promise<T> =>
@@ -46,11 +50,11 @@ async function ask<T>(schema: z.ZodType<T>, sys: string, user: string): Promise<
 }
 
 export async function generate(req: GenerateRequest): Promise<Storyboard> {
-  const sys = system(req.kind)
+  const sys = system(req.kind) + (req.voice ? NARRATION : '')
   const sb = await ask(
     AiStoryboard,
     sys,
-    `Video: ${req.text}\nLength: ${req.duration}s, about ${Math.max(2, Math.round(req.duration / 4))} scenes. Tone: ${req.tone}.`
+    `Video: ${req.text}\nLength: ${req.duration}s, about ${Math.max(2, Math.round(req.duration / 4))} scenes. Tone: ${req.tone}.${req.voice ? ' Narration: on, write a voiceover line for every scene.' : ''}`
   )
 
   // Rule 1 + 2: re-ask only for the scenes with invented numbers; drop any that are still wrong.
@@ -74,5 +78,11 @@ export async function generate(req: GenerateRequest): Promise<Storyboard> {
     if (!sb.scenes.length)
       throw new Error('Every scene used numbers that are not in your description.')
   }
-  return finalize(sb, req)
+  const out = finalize(sb, req)
+  return narrate({
+    ...out,
+    voice: req.voice,
+    music: req.music,
+    shareCopy: req.music ? `${out.shareCopy}\n\n${MUSIC_CREDIT}` : out.shareCopy
+  })
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { finalize, fitDuration, inventedNumbers } from './validate'
+import { finalize, fitDuration, fitVoice, inventedNumbers } from './validate'
 import type { AiScene, GenerateRequest } from '../../shared/schema'
 
 const scene = (s: Partial<AiScene>): AiScene => ({
@@ -14,7 +14,8 @@ const req: GenerateRequest = {
   kind: 'launch',
   tone: 'default',
   format: 'landscape',
-  duration: 20
+  duration: 20,
+  music: false
 }
 
 describe('inventedNumbers', () => {
@@ -36,6 +37,11 @@ describe('inventedNumbers', () => {
       )
     ).toEqual([])
   })
+  it('checks narration lines too', () => {
+    expect(
+      inventedNumbers(scene({ headline: 'Fast', voiceover: 'Used by 5000 teams' }), req.text)
+    ).toEqual(['5000'])
+  })
   it('checks list items too', () => {
     expect(
       inventedNumbers(
@@ -43,6 +49,22 @@ describe('inventedNumbers', () => {
         req.text
       )
     ).toEqual(['10'])
+  })
+})
+
+describe('fitVoice', () => {
+  it('stretches only scenes whose narration is longer than the scene', () => {
+    const sb = finalize(
+      {
+        title: 't',
+        palette: { bg: '#000', fg: '#fff', accent: '#fc0' },
+        shareCopy: '',
+        scenes: [scene({ durationSec: 10 }), scene({ durationSec: 10 })]
+      },
+      req
+    )
+    // scene 1 holds 3s easily; scene 2 needs 12s of speech + 0.3 lead + 0.5 tail
+    expect(fitVoice(sb, [3, 12]).scenes.map((s) => s.durationSec)).toEqual([10, 12.8])
   })
 })
 

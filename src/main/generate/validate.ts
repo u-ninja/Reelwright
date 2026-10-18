@@ -1,4 +1,12 @@
-import type { AiScene, AiStoryboard, GenerateRequest, Scene, Storyboard } from '../../shared/schema'
+import {
+  type AiScene,
+  type AiStoryboard,
+  type GenerateRequest,
+  type Scene,
+  type Storyboard,
+  VO_LEAD,
+  VO_TAIL
+} from '../../shared/schema'
 
 const norm = (s: string): string =>
   s
@@ -12,7 +20,9 @@ const numbers = (s: string): string[] =>
 export function inventedNumbers(s: AiScene, source: string): string[] {
   const known = new Set(numbers(source))
   const items = s.template === 'code' ? [] : (s.items ?? [])
-  return numbers([s.headline, s.sub ?? '', ...items].join(' ')).filter((n) => !known.has(n))
+  return numbers([s.headline, s.sub ?? '', s.voiceover ?? '', ...items].join(' ')).filter(
+    (n) => !known.has(n)
+  )
 }
 
 // Rule 2: a quote must be the source's own words, otherwise it becomes a plain feature scene.
@@ -32,6 +42,17 @@ export function fitDuration<T extends { durationSec: number }>(scenes: T[], targ
   const rest = out.reduce((a, s) => a + s.durationSec, 0) - last.durationSec
   last.durationSec = Math.max(0.5, Math.round((target - rest) * 10) / 10)
   return out
+}
+
+// Stretch each scene so it holds its narration line (never cut or speed up speech).
+export function fitVoice(sb: Storyboard, secs: (number | undefined)[]): Storyboard {
+  return {
+    ...sb,
+    scenes: sb.scenes.map((s, i) => {
+      const need = secs[i] === undefined ? 0 : Math.ceil((secs[i]! + VO_LEAD + VO_TAIL) * 10) / 10
+      return { ...s, durationSec: Math.max(s.durationSec, need) }
+    })
+  }
 }
 
 export const finalize = (ai: AiStoryboard, req: GenerateRequest): Storyboard => ({

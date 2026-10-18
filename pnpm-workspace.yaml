@@ -1,2 +1,5 @@
 allowBuilds:
   electron-winstaller: false
+  onnxruntime-node: true
+  protobufjs: false
+  sharp: false

@@ -25,6 +25,7 @@ export const Scene = z.object({
   asset: z.string().optional(), // shortcut: an image URL for now, becomes a key into brief assets in milestone 4
   transitionIn: z.enum(['fade', 'slide', 'wipe', 'zoom', 'cut']),
   bg: z.enum(['base', 'accent', 'inverse']).optional(), // full-bleed color flip for this scene
+  voiceover: z.string().optional(), // narration for this scene; adds to the on-screen text, never contradicts it
   section: z.string().optional()
 })
 
@@ -45,6 +46,8 @@ export const Storyboard = z.object({
   font: z.enum(['sans', 'serif', 'mono']).optional(), // type family for the whole video
   scenes: z.array(Scene).min(1),
   hud: z.boolean().optional(), // REC / timecode frame overlay
+  voice: z.string().optional(), // Kokoro voice id; absent = no narration
+  music: z.boolean().optional(), // background music, on unless false
   shareCopy: z.string()
 })
 
@@ -58,6 +61,14 @@ export const FORMATS = {
 } as const
 
 export const duration = (sb: Storyboard): number => sb.scenes.reduce((a, s) => a + s.durationSec, 0)
+
+// Start time of every scene, in seconds.
+export const sceneStarts = (sb: Storyboard): number[] =>
+  sb.scenes.map((_, i) => sb.scenes.slice(0, i).reduce((a, s) => a + s.durationSec, 0))
+
+// A narration line starts this long after its scene does, and the scene holds this long after it ends.
+export const VO_LEAD = 0.3
+export const VO_TAIL = 0.5
 
 // What the AI writes. Kind/tone/format come from the user; asset templates wait for attachments (milestone 4a).
 export const AiScene = Scene.omit({ asset: true, section: true }).extend({
@@ -80,6 +91,10 @@ export const GenerateRequest = z.object({
   kind: Storyboard.shape.kind,
   tone: Storyboard.shape.tone,
   format: Storyboard.shape.format,
-  duration: z.number().min(5).max(60)
+  duration: z.number().min(5).max(60),
+  voice: z
+    .enum(['af_heart', 'af_bella', 'am_michael', 'am_fenrir', 'bf_emma', 'bm_george'])
+    .optional(),
+  music: z.boolean()
 })
 export type GenerateRequest = z.infer<typeof GenerateRequest>
