@@ -2,6 +2,8 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { spawn } from 'child_process'
 import { once } from 'events'
+import { FORMATS, Storyboard, duration } from '../shared/schema'
+import { demo } from '../shared/demo'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
@@ -45,10 +47,12 @@ const FFMPEG = process.env['FFMPEG'] ?? '/opt/homebrew/bin/ffmpeg'
 const FPS = 30
 
 // Seek the Player frame by frame in an offscreen window and pipe raw frames into ffmpeg.
-async function render(): Promise<string> {
+async function render(input: unknown): Promise<string> {
+  const sb = Storyboard.parse(input)
+  const [W, H] = FORMATS[sb.format]
   const win = new BrowserWindow({
-    width: 1920,
-    height: 1080,
+    width: W,
+    height: H,
     show: false,
     webPreferences: { offscreen: true, backgroundThrottling: false }
   })
@@ -58,11 +62,13 @@ async function render(): Promise<string> {
   try {
     await load(win, 'render')
     const wc = win.webContents
-    const duration: number = await wc.executeJavaScript(
-      'new Promise(r => { const c = () => window.__seek ? r(window.__duration) : setTimeout(c, 10); c() })'
+    await wc.executeJavaScript(
+      'new Promise(r => { const c = () => window.__load ? r() : setTimeout(c, 10); c() })'
     )
+    await wc.executeJavaScript(`__load(${JSON.stringify(sb)})`)
+    const frames = Math.round(duration(sb) * FPS)
     const started = Date.now()
-    for (let i = 0; i < Math.round(duration * FPS); i++) {
+    for (let i = 0; i < frames; i++) {
       await wc.executeJavaScript(`__seek(${i / FPS})`)
       const img = await wc.capturePage()
       if (!ff) {
@@ -80,7 +86,7 @@ async function render(): Promise<string> {
           '-i',
           '-',
           '-vf',
-          'scale=1920:1080',
+          `scale=${W}:${H}`,
           '-c:v',
           'libx264',
           '-pix_fmt',
@@ -93,7 +99,7 @@ async function render(): Promise<string> {
       if (!ff.stdin!.write(img.toBitmap())) await once(ff.stdin!, 'drain')
     }
     console.log(
-      `rendered ${Math.round(duration * FPS)} frames at ${((duration * FPS * 1000) / (Date.now() - started)).toFixed(1)} fps`
+      `rendered ${frames} frames at ${((frames * 1000) / (Date.now() - started)).toFixed(1)} fps`
     )
     ff!.stdin!.end()
     const [code] = await once(ff!, 'close')
@@ -119,11 +125,12 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  ipcMain.handle('render', render)
+  ipcMain.handle('render', (_, sb) => render(sb))
 
-  // LR_RENDER=1 npm run dev → render the demo, print the path, quit (smoke test).
-  if (process.env['LR_RENDER']) {
-    render()
+  // LR_RENDER=landscape|vertical|square pnpm dev → render the demo, print the path, quit (smoke test).
+  const format = process.env['LR_RENDER']
+  if (format) {
+    render({ ...demo, format })
       .then(console.log, console.error)
       .finally(() => app.quit())
     return

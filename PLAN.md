@@ -181,4 +181,4 @@ Later (not v1): project-folder input, Claude plugin / desktop extension (MCP), r
 - Ollama: `brew services start ollama`; model: `ollama pull gemma4:12b-it-qat`; test: `curl localhost:11434/api/tags`.
 - ffmpeg is installed via Homebrew at `/opt/homebrew/bin/ffmpeg` (dev only; bundle it in milestone 9).
 - Reference material: `../brag/skills/brag-slim/SKILL.md` (creative rules, tones, sound guidance).
-- Milestone 1 measured (M2 16GB, 1080p, 2 simple scenes): 28.4 fps capture+encode → a 10-min video renders in ~10.5 min. Smoke test: `LR_RENDER=1 pnpm dev` prints the MP4 path.
+- Milestone 1 measured (M2 16GB, 1080p, 2 simple scenes): 28.4 fps capture+encode → a 10-min video renders in ~10.5 min. Smoke test: `LR_RENDER=landscape pnpm dev` (or vertical, square) prints the MP4 path.
