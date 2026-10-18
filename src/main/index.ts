@@ -2,7 +2,8 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { spawn } from 'child_process'
 import { once } from 'events'
-import { FORMATS, Storyboard, duration } from '../shared/schema'
+import { FORMATS, GenerateRequest, Storyboard, duration } from '../shared/schema'
+import { generate } from './generate'
 import { demo } from '../shared/demo'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -126,11 +127,32 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('render', (_, sb) => render(sb))
+  ipcMain.handle('generate', (_, req) => generate(GenerateRequest.parse(req)))
 
   // LR_RENDER=landscape|vertical|square pnpm dev → render the demo, print the path, quit (smoke test).
+  // Add LR_PROMPT="..." (and LR_KIND=explainer) to generate the storyboard with Ollama first; LR_TONE and LR_DURATION set tone and length.
   const format = process.env['LR_RENDER']
   if (format) {
-    render({ ...demo, format })
+    const text = process.env['LR_PROMPT']
+    const kind = process.env['LR_KIND'] ?? 'launch'
+    ;(text
+      ? generate(
+          GenerateRequest.parse({
+            text,
+            kind,
+            format,
+            tone: process.env['LR_TONE'] ?? 'default',
+            duration: +(process.env['LR_DURATION'] ?? 20)
+          })
+        )
+      : Promise.resolve(demo)
+    )
+      .then(
+        (sb) => (
+          console.log(JSON.stringify(sb, null, 1)),
+          render({ ...sb, format, tone: process.env['LR_TONE'] ?? sb.tone })
+        )
+      )
       .then(console.log, console.error)
       .finally(() => app.quit())
     return

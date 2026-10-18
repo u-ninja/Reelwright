@@ -19,25 +19,28 @@ export const demo: Storyboard = {
   format: 'landscape',
   palette: { bg: '#0b0b10', fg: '#f5f5f7', accent: '#f2b632' },
   shareCopy: 'A video from a sentence, rendered on your own machine.',
+  hud: true,
   scenes: [
     { template: 'logo', durationSec: 2, headline: 'Reelwright', asset: logo, transitionIn: 'zoom' },
     {
       template: 'title',
       durationSec: 2.5,
-      headline: 'Videos from a sentence.',
-      sub: 'Seconds to minutes.',
-      transitionIn: 'fade'
+      headline: 'made something?\nnow ==show== it.',
+      bg: 'accent',
+      transitionIn: 'cut'
     },
     {
       template: 'feature',
       durationSec: 2.5,
-      headline: 'Describe it.',
+      kicker: 'One sentence',
+      headline: 'your idea,\nnow a *launch video.*',
       sub: 'A URL or a sentence is enough.',
       transitionIn: 'slide'
     },
     {
       template: 'stat',
       durationSec: 2,
+      kicker: 'Rendered locally',
       headline: '30 fps',
       sub: 'rendered frame by frame',
       transitionIn: 'wipe'
@@ -52,6 +55,13 @@ export const demo: Storyboard = {
     { template: 'step', durationSec: 2, headline: 'Chat about the video', transitionIn: 'cut' },
     { template: 'step', durationSec: 2, headline: 'Preview every frame', transitionIn: 'cut' },
     {
+      template: 'code',
+      durationSec: 3.5,
+      headline: 'zsh — reelwright',
+      items: ['$ pnpm dev', 'Writing storyboard… done', '$ open ~/Movies/reelwright.mp4'],
+      transitionIn: 'zoom'
+    },
+    {
       template: 'screenshot',
       durationSec: 2.5,
       headline: 'What you see is what renders.',
@@ -65,11 +75,18 @@ export const demo: Storyboard = {
       sub: 'the ponytail rule',
       transitionIn: 'fade'
     },
-    { template: 'text', durationSec: 1.5, headline: 'No cloud required.', transitionIn: 'wipe' },
+    {
+      template: 'text',
+      durationSec: 1.5,
+      headline: 'No cloud ==required.==',
+      bg: 'inverse',
+      transitionIn: 'wipe'
+    },
     {
       template: 'cta',
       durationSec: 2.5,
-      headline: 'Make your first video',
+      headline: 'now go *make one.*',
+      bg: 'accent',
       sub: 'github.com/u-ninja/Reelwright',
       transitionIn: 'zoom'
     }

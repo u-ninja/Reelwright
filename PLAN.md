@@ -143,6 +143,16 @@ System prompt = shared rules + one short block for the chosen kind.
 - **story:** setup → turn → payoff.
 - **custom:** user's own description of the structure, no preset block.
 
+## Motion system & range of video styles
+
+Goal: any kind of video, made with the craft of a motion designer. The AI only picks templates and writes words; the motion lives in our code, all driven by `t` (rule 4).
+
+- **Done (motion pass 1):** kinetic text per tone (masked word-rise, letter blur-in, overshoot punch, hard cut), staggered blocks, draw-on accent lines, count-up stats, typing terminal (`code` template), living backdrop (drifting glows, animated film grain, vignette) continuous across cuts, camera push, exits. Entrance timing scales to scene length.
+- **Next:** 3D scenes via react-three-fiber (extruded titles, device mockups, particles; rendered on demand from `t`), Lottie illustrations (`goToAndStop(frame)`), more transitions (push, mask reveal, match-cut), beat-synced cuts once music lands (milestone 5).
+- **Done (brag pass):** headline markup (`*accent*`, `==highlight==` that wipes on, `\n` line builds), mono kickers, per-scene color flips (`bg: accent | inverse`), REC/timecode HUD, terminal COPY → COPIED, per-video font family (sans / serif / mono), palette designed from the subject (prompt forbids the default navy + sky blue; follows user colors).
+- **Director mode (spike findings, not built):** brag's quality comes from a frontier model writing a custom Hyperframes composition per video (HTML + GSAP timelines registered on `window.__timelines`; runtime `hyperframe.runtime.iife.js` seeks them with `seek({time})` and sets `window.__renderReady`). Hyperframes is Apache-2.0 (HeyGen). Plan: when Claude/Gemini is connected (milestone 6), the AI writes a Hyperframes composition; render it with `hyperframes render` (Puppeteer + bundled Chromium, needs Node ≥ 22) or by loading the runtime into our sandboxed render window and seeking it per frame. Never call `hyperframes publish` (uploads). Templates stay the Ollama path and the fallback.
+- **Later:** user video clips as footage (seek `<video>.currentTime = t`), charts/data animation, maps, character/explainer illustration packs, AI-written custom scenes (milestone 7).
+
 ## Music
 
 v1: procedural, no samples, no dependencies. For long-form, the music changes pattern per section (intro/build/main/outro) so 10 minutes isn't one 8-bar loop. `music.ts` renders from `{bpm, mood, key}` with OfflineAudioContext (drums + bass + pad + a few hit sounds on scene cuts, in the same key), soft mix, fade out at the end. Rendered once per video to WAV and handed to ffmpeg. Later: royalty-free track packs.
@@ -182,3 +192,4 @@ Later (not v1): project-folder input, Claude plugin / desktop extension (MCP), r
 - ffmpeg is installed via Homebrew at `/opt/homebrew/bin/ffmpeg` (dev only; bundle it in milestone 9).
 - Reference material: `../brag/skills/brag-slim/SKILL.md` (creative rules, tones, sound guidance).
 - Milestone 1 measured (M2 16GB, 1080p, 2 simple scenes): 28.4 fps capture+encode → a 10-min video renders in ~10.5 min. Smoke test: `LR_RENDER=landscape pnpm dev` (or vertical, square) prints the MP4 path.
+- Milestone 3 measured: gemma4 writes a 20s storyboard in ~60s; generate + render end to end ~80s. Smoke test with AI: `LR_RENDER=landscape LR_KIND=explainer LR_PROMPT="..." pnpm dev`. Unit tests: `pnpm test`.

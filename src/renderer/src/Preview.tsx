@@ -5,13 +5,7 @@ import { Player } from './player/Player'
 import { Loader } from './components/Loader'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { Chip } from './components/Chip'
 import { type Storyboard, duration, Storyboard as Schema } from '../../shared/schema'
 
 const clock = (s: number): string =>
@@ -59,21 +53,6 @@ export function Preview({
     }
   }
 
-  const pick = (key: 'tone' | 'format', options: readonly string[]): React.JSX.Element => (
-    <Select value={sb[key]} onValueChange={(v) => onChange({ ...sb, [key]: v })}>
-      <SelectTrigger size="sm" className="rounded-full" aria-label={key}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((o) => (
-          <SelectItem key={o} value={o}>
-            {o}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
-
   return (
     <aside className="flex w-[440px] shrink-0 flex-col gap-4 overflow-y-auto border-l p-4">
       <div className="flex items-center justify-between">
@@ -113,8 +92,18 @@ export function Preview({
         </span>
       </div>
       <div className="flex flex-wrap gap-2">
-        {pick('tone', Schema.shape.tone.options)}
-        {pick('format', Schema.shape.format.options)}
+        <Chip
+          label="Tone"
+          value={sb.tone}
+          options={Schema.shape.tone.options}
+          onChange={(tone) => onChange({ ...sb, tone })}
+        />
+        <Chip
+          label="Format"
+          value={sb.format}
+          options={Schema.shape.format.options}
+          onChange={(format) => onChange({ ...sb, format })}
+        />
       </div>
       <p className="text-sm text-muted-foreground">{sb.shareCopy}</p>
       <ol className="flex flex-col gap-1">

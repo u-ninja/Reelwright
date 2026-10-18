@@ -1,65 +1,30 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import {
-  type EasingFunction,
   type MotionValue,
-  anticipate,
-  backOut,
-  easeInOut,
   easeOut,
   motion,
   useMotionValue,
   useMotionValueEvent,
   useTransform
 } from 'motion/react'
-import { type Scene, type Storyboard, FORMATS } from '../../../shared/schema'
-
-// Tone = how things move: entrance length (s), stagger between elements (s), easing.
-const TONES: Record<Storyboard['tone'], { enter: number; stagger: number; ease: EasingFunction }> =
-  {
-    default: { enter: 0.6, stagger: 0.12, ease: easeOut },
-    polished: { enter: 0.8, stagger: 0.15, ease: easeInOut },
-    'yc-parody': { enter: 0.4, stagger: 0.08, ease: backOut },
-    chaotic: { enter: 0.25, stagger: 0.05, ease: anticipate },
-    deadpan: { enter: 0.01, stagger: 0, ease: easeOut },
-    cinematic: { enter: 1.2, stagger: 0.3, ease: easeInOut },
-    'app-store': { enter: 0.5, stagger: 0.1, ease: backOut }
-  }
-
-type Local = { t: MotionValue<number>; s: Scene; sb: Storyboard; step: number }
-const LocalCtx = createContext<Local>(null!)
-
-// Staggered entrance + shared exit. Everything derives from t (seconds into the scene),
-// never from Motion's own clock, so a seek fully determines the frame.
-function In({
-  i = 0,
-  className,
-  children
-}: {
-  i?: number
-  className?: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  const { t, s, sb } = useContext(LocalCtx)
-  const tone = TONES[sb.tone]
-  const start = i * tone.stagger
-  const p = useTransform(t, [start, start + tone.enter], [0, 1], { ease: tone.ease })
-  const opacity = useTransform(() =>
-    Math.min(p.get(), Math.min(1, (s.durationSec - t.get()) / 0.3))
-  )
-  const transform = useTransform(p, (v) => `translateY(${(1 - v) * 4}cqmin)`)
-  return (
-    <motion.div className={className} style={{ opacity, transform }}>
-      {children}
-    </motion.div>
-  )
-}
+import { type Storyboard, FORMATS, duration } from '../../../shared/schema'
+import { type Local, LocalCtx, useLocal } from './context'
+import { Backdrop, Bar, CountUp, Grain, Hud, In, Kicker, Kinetic, Terminal } from './motion'
 
 const Img = ({ src, className }: { src?: string; className: string }): React.JSX.Element | null =>
   src ? <img src={src} alt="" className={className} /> : null
 
+const FONTS = {
+  sans: "'Geist Variable', sans-serif",
+  serif: "'Fraunces Variable', serif",
+  mono: "'Geist Mono Variable', monospace"
+}
+
+const HEAD = 'font-bold leading-[1.05] tracking-[-0.035em]'
+
 function Template(): React.JSX.Element {
-  const { s, sb, step, t } = useContext(LocalCtx)
+  const { s, sb, step, t } = useLocal()
   const kenBurns = useTransform(t, [0, s.durationSec], ['scale(1)', 'scale(1.06)'])
   const accent = { color: sb.palette.accent }
   const center =
@@ -69,46 +34,67 @@ function Template(): React.JSX.Element {
     case 'title':
       return (
         <div className={center}>
-          <In className="text-[12cqmin] font-bold leading-none tracking-tight">{s.headline}</In>
-          <In i={1} className="text-[4.5cqmin] opacity-70">
-            {s.sub}
-          </In>
+          <Kicker text={s.kicker} />
+          <Kinetic
+            text={s.headline}
+            chars={s.headline.length <= 24}
+            className={`text-[13cqmin] ${HEAD}`}
+          />
+          <Bar i={1} center className="h-[0.6cqmin] w-[18cqmin] rounded-full" />
+          {s.sub && (
+            <In i={2} className="text-[4.5cqmin] opacity-70">
+              {s.sub}
+            </In>
+          )}
         </div>
       )
     case 'text':
       return (
         <div className={center}>
-          <In className="text-[8cqmin] font-semibold leading-tight">{s.headline}</In>
+          <Kicker text={s.kicker} />
+          <Kinetic text={s.headline} className={`text-[8.5cqmin] ${HEAD}`} />
         </div>
       )
     case 'stat':
       return (
         <div className={center}>
-          <In className="text-[22cqmin] font-black leading-none">
-            <span style={accent}>{s.headline}</span>
-          </In>
-          <In i={1} className="text-[5cqmin] opacity-70">
-            {s.sub}
-          </In>
+          <Kicker text={s.kicker} />
+          <div style={accent}>
+            <CountUp
+              text={s.headline}
+              className={`${s.headline.length > 8 ? 'text-[13cqmin]' : 'text-[24cqmin]'} font-black leading-none tracking-[-0.04em]`}
+            />
+          </div>
+          {s.sub && <Kinetic i={1} text={s.sub} className="text-[5cqmin] opacity-70" />}
         </div>
       )
     case 'quote':
       return (
         <div className={center}>
-          <In className="text-[7cqmin] font-medium italic leading-tight">“{s.headline}”</In>
-          <In i={1} className="text-[4cqmin]">
-            <span style={accent}>— {s.sub}</span>
+          <Kicker text={s.kicker} />
+          <In className="text-[16cqmin] leading-none font-black">
+            <span style={accent}>“</span>
           </In>
+          <Kinetic
+            text={s.headline}
+            className="-mt-[6cqmin] text-[7cqmin] leading-tight font-medium italic"
+          />
+          {s.sub && (
+            <In i={2} className="text-[4cqmin]">
+              <span style={accent}>— {s.sub}</span>
+            </In>
+          )}
         </div>
       )
     case 'list':
       return (
         <div className={left}>
-          <In className="text-[8cqmin] font-bold">{s.headline}</In>
+          <Kicker text={s.kicker} />
+          <Kinetic text={s.headline} className={`text-[8cqmin] ${HEAD}`} />
           {s.items?.map((item, i) => (
-            <In key={item} i={i + 1} className="flex items-center gap-[2cqmin] text-[5.5cqmin]">
+            <In key={i} i={i + 1} className="flex items-center gap-[2.5cqmin] text-[5.5cqmin]">
               <span
-                className="size-[1.6cqmin] rounded-full"
+                className="h-[0.6cqmin] w-[4cqmin] rounded-full"
                 style={{ background: sb.palette.accent }}
               />
               {item}
@@ -119,21 +105,37 @@ function Template(): React.JSX.Element {
     case 'step':
       return (
         <div className={left}>
-          <In className="text-[5cqmin] font-semibold uppercase tracking-widest">
-            <span style={accent}>Step {step}</span>
+          <Kicker text={s.kicker} />
+          <In className="flex items-baseline gap-[2cqmin]">
+            <span
+              className="text-[16cqmin] leading-none font-black tracking-[-0.05em]"
+              style={accent}
+            >
+              {String(step).padStart(2, '0')}
+            </span>
+            <span className="text-[3.5cqmin] font-semibold tracking-[0.3em] uppercase opacity-60">
+              Step
+            </span>
           </In>
-          <In i={1} className="text-[9cqmin] font-bold leading-tight">
-            {s.headline}
-          </In>
-          <In i={2} className="text-[4.5cqmin] opacity-70">
-            {s.sub}
-          </In>
+          <Kinetic i={1} text={s.headline} className={`text-[9cqmin] ${HEAD}`} />
+          {s.sub && (
+            <In i={2} className="text-[4.5cqmin] opacity-70">
+              {s.sub}
+            </In>
+          )}
+        </div>
+      )
+    case 'code':
+      return (
+        <div className={center}>
+          <Terminal title={s.headline} lines={s.items ?? []} />
         </div>
       )
     case 'screenshot':
       return (
         <div className={center}>
-          <In className="text-[6cqmin] font-bold">{s.headline}</In>
+          <Kicker text={s.kicker} />
+          <Kinetic text={s.headline} className={`text-[6cqmin] ${HEAD}`} />
           <In i={1} className="min-h-0 overflow-hidden rounded-[2cqmin] shadow-2xl">
             <motion.div style={{ transform: kenBurns }}>
               <Img src={s.asset} className="max-h-[55cqh] max-w-[80cqw]" />
@@ -147,51 +149,58 @@ function Template(): React.JSX.Element {
           <In>
             <Img src={s.asset} className="size-[28cqmin] object-contain" />
           </In>
-          <In i={1} className="text-[8cqmin] font-bold">
-            {s.headline}
-          </In>
+          <Kinetic i={1} text={s.headline} chars className={`text-[8cqmin] ${HEAD}`} />
         </div>
       )
     case 'cta':
       return (
         <div className={center}>
-          <In className="text-[9cqmin] font-bold leading-tight">{s.headline}</In>
-          <In i={1} className="pt-[2cqmin] text-[4.5cqmin] font-semibold">
-            <span
-              className="rounded-full px-[5cqmin] py-[2cqmin]"
-              style={{ background: sb.palette.accent, color: sb.palette.bg }}
-            >
-              {s.sub}
-            </span>
-          </In>
+          <Kicker text={s.kicker} />
+          <Kinetic text={s.headline} className={`text-[10cqmin] ${HEAD}`} />
+          {s.sub && (
+            <In i={1} className="pt-[2cqmin] text-[4.5cqmin] font-semibold">
+              <span
+                className="rounded-full px-[5cqmin] py-[2cqmin]"
+                style={{
+                  background: sb.palette.accent,
+                  color: sb.palette.bg,
+                  boxShadow: `0 0 6cqmin -1cqmin ${sb.palette.accent}`
+                }}
+              >
+                {s.sub}
+              </span>
+            </In>
+          )}
         </div>
       )
     default: // feature; shortcut: 'custom' renders as feature until AI scenes land in milestone 7
       return (
         <div className={left}>
-          <In>
-            <div
-              className="h-[1cqmin] w-[14cqmin] rounded-full"
-              style={{ background: sb.palette.accent }}
-            />
-          </In>
-          <In i={1} className="text-[10cqmin] font-bold leading-tight">
-            {s.headline}
-          </In>
-          <In i={2} className="text-[5cqmin] opacity-70">
-            {s.sub}
-          </In>
+          <Kicker text={s.kicker} />
+          <Bar className="h-[0.8cqmin] w-[14cqmin] rounded-full" />
+          <Kinetic i={1} text={s.headline} className={`text-[10cqmin] ${HEAD}`} />
+          {s.sub && (
+            <In i={2} className="text-[5cqmin] opacity-70">
+              {s.sub}
+            </In>
+          )}
         </div>
       )
   }
 }
 
-function SceneView({
-  time,
-  start,
-  ...rest
-}: Omit<Local, 't'> & { time: MotionValue<number>; start: number }): React.JSX.Element {
-  const t = useTransform(time, (v) => v - start)
+function SceneView({ start, ...rest }: Omit<Local, 't'> & { start: number }): React.JSX.Element {
+  const t = useTransform(rest.time, (v) => v - start)
+  // full-bleed color flip: the scene repaints the palette and everything inside follows it
+  const { bg, fg, accent } = rest.sb.palette
+  const flip = rest.s.bg ?? 'base'
+  const palette =
+    flip === 'accent'
+      ? { bg: accent, fg: bg, accent: bg }
+      : flip === 'inverse'
+        ? { bg: fg, fg: bg, accent }
+        : rest.sb.palette
+  const sb = { ...rest.sb, palette }
   const p = useTransform(t, [0, 0.5], [0, 1], { ease: easeOut })
   const kind = rest.s.transitionIn
   const opacity = useTransform(p, (v) => (kind === 'fade' || kind === 'zoom' ? v : 1))
@@ -205,10 +214,26 @@ function SceneView({
   const clipPath = useTransform(p, (v) =>
     kind === 'wipe' ? `inset(0 ${(1 - v) * 100}% 0 0)` : 'none'
   )
+  // slow camera push across the whole scene
+  const push = useTransform(
+    t,
+    (v) => `scale(${1 + 0.035 * Math.min(1, Math.max(0, v / rest.s.durationSec))})`
+  )
   return (
-    <LocalCtx.Provider value={{ ...rest, t }}>
-      <motion.div className="absolute inset-0" style={{ opacity, transform, clipPath }}>
-        <Template />
+    <LocalCtx.Provider value={{ ...rest, sb, t }}>
+      <motion.div
+        className="absolute inset-0"
+        style={{
+          opacity,
+          transform,
+          clipPath,
+          color: palette.fg,
+          background: flip === 'base' ? undefined : palette.bg
+        }}
+      >
+        <motion.div className="h-full" style={{ transform: push }}>
+          <Template />
+        </motion.div>
       </motion.div>
     </LocalCtx.Provider>
   )
@@ -244,9 +269,11 @@ export function Player({
         aspectRatio: `${w} / ${h}`,
         containerType: 'size',
         background: sb.palette.bg,
-        color: sb.palette.fg
+        color: sb.palette.fg,
+        fontFamily: FONTS[sb.font ?? 'sans']
       }}
     >
+      <Backdrop sb={sb} time={time} />
       <SceneView
         key={`${index}-${sb.tone}`}
         time={time}
@@ -255,6 +282,8 @@ export function Player({
         sb={sb}
         step={step}
       />
+      <Grain time={time} />
+      {sb.hud && <Hud sb={sb} time={time} total={duration(sb)} />}
     </div>
   )
 }
