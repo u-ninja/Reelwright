@@ -1,5 +1,5 @@
-import { Fragment } from 'react'
-import { type MotionValue, easeOut, motion, useTransform } from 'motion/react'
+import { Fragment, useRef } from 'react'
+import { type MotionValue, easeOut, motion, useMotionValueEvent, useTransform } from 'motion/react'
 import { type Storyboard, FORMATS } from '../../../shared/schema'
 import { blockStart, useEnter, useExit, useLocal } from './context'
 import { type Word, countable, parseMarkup, plainText } from './markup'
@@ -108,7 +108,7 @@ export function Kinetic({
         <div key={li} aria-hidden>
           {line.map((w, k) => {
             const prev = line[k - 1]
-            const space = k > 0 ? ' ' : ''
+            const space = k > 0 && !w.glue ? ' ' : ''
             // a highlight run is drawn once, around all of its words
             if (w.mark === 'highlight') {
               if (prev?.seg === w.seg) return null
@@ -137,6 +137,31 @@ export function Kinetic({
         </div>
       ))}
     </div>
+  )
+}
+
+// A video clip seeked to scene time on every frame, so preview and render show the same picture.
+// shortcut: clip sound is muted and the clip plays from its start; trim + clip audio come with the editor (milestone 8).
+export function Footage({ src }: { src: string }): React.JSX.Element {
+  const { t } = useLocal()
+  const ref = useRef<HTMLVideoElement>(null)
+  const seek = (v: number): void => {
+    const el = ref.current
+    if (!el || !el.duration) return
+    const to = Math.min(Math.max(0, v), el.duration - 0.04)
+    if (Math.abs(el.currentTime - to) > 0.01) el.currentTime = to
+  }
+  useMotionValueEvent(t, 'change', seek)
+  return (
+    <video
+      ref={ref}
+      src={src}
+      muted
+      playsInline
+      preload="auto"
+      onLoadedMetadata={() => seek(t.get())}
+      className="absolute inset-0 size-full object-cover"
+    />
   )
 }
 

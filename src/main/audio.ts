@@ -13,7 +13,7 @@ export const FFMPEG = process.env['FFMPEG'] ?? '/opt/homebrew/bin/ffmpeg'
 const FFPROBE = FFMPEG.replace(/ffmpeg$/, 'ffprobe')
 export const MUSIC_CREDIT = 'Music: "Happy Beats / Business Moves Vol. 1" by ende.app (CC BY 4.0)'
 
-const dir = (name: string): string => {
+export const dir = (name: string): string => {
   const d = join(app.getPath('userData'), name)
   mkdirSync(d, { recursive: true })
   return d
@@ -31,6 +31,10 @@ async function run(cmd: string, args: string[]): Promise<string> {
   if (code !== 0) throw new Error(`${cmd} exited ${code}: ${err}`)
   return out
 }
+
+// Length of an audio or video file in seconds.
+export const mediaDuration = async (path: string): Promise<number> =>
+  +(await run(FFPROBE, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path]))
 
 // Kokoro-82M runs locally; the model downloads once into the app's data folder.
 type Tts = {
@@ -54,15 +58,7 @@ const model = (): Promise<Tts> =>
 export async function speak(text: string, voice: string): Promise<{ path: string; sec: number }> {
   const path = join(dir('voice'), hash([voice, text]) + '.wav')
   if (!existsSync(path)) await (await (await model()).generate(text, { voice })).save(path)
-  const sec = +(await run(FFPROBE, [
-    '-v',
-    'error',
-    '-show_entries',
-    'format=duration',
-    '-of',
-    'csv=p=0',
-    path
-  ]))
+  const sec = await mediaDuration(path)
   return { path, sec }
 }
 

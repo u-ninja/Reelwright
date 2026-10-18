@@ -23,6 +23,18 @@ describe('parseMarkup', () => {
     // words of one marked run share a segment so the highlight box wraps them together
     expect(lines[1][2].seg).toBe(lines[1][3].seg)
   })
+  it('keeps punctuation that touches a marked word attached to it', () => {
+    const [line] = parseMarkup('Build the *core*. Then *ship*!', 0, 0.1, 0)
+    expect(line.map((w) => [w.text, !!w.glue])).toEqual([
+      ['Build', false],
+      ['the', false],
+      ['core', false],
+      ['.', true],
+      ['Then', false],
+      ['ship', false],
+      ['!', true]
+    ])
+  })
   it('strips markup for screen readers', () => {
     expect(plainText('now a *launch*\n==video==')).toBe('now a launch video')
   })

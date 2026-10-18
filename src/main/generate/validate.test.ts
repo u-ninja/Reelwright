@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { finalize, fitDuration, fitVoice, inventedNumbers } from './validate'
+import { finalize, fitDuration, fitVoice, inventedNumbers, placeMedia } from './validate'
 import type { AiScene, GenerateRequest } from '../../shared/schema'
 
 const scene = (s: Partial<AiScene>): AiScene => ({
@@ -15,7 +15,8 @@ const req: GenerateRequest = {
   tone: 'default',
   format: 'landscape',
   duration: 20,
-  music: false
+  music: false,
+  attachments: []
 }
 
 describe('inventedNumbers', () => {
@@ -49,6 +50,79 @@ describe('inventedNumbers', () => {
         req.text
       )
     ).toEqual(['10'])
+  })
+})
+
+describe('attachments', () => {
+  it('maps labels to URLs; media scenes without a matching file become features', () => {
+    const sb = finalize(
+      {
+        title: 't',
+        palette: { bg: '#000', fg: '#fff', accent: '#fc0' },
+        shareCopy: '',
+        scenes: [
+          scene({ template: 'footage', asset: 'vid1' }),
+          scene({ template: 'logo', asset: 'vid1' }), // wrong kind
+          scene({ template: 'screenshot', asset: 'img9' }), // missing
+          scene({ template: 'feature', asset: 'img1' }) // a label on a non-media scene switches it to media
+        ]
+      },
+      req,
+      req.text,
+      {
+        vid1: { url: 'app-asset://file/aaaaaaaaaaaaaaaa.mp4', kind: 'video' },
+        img1: { url: 'u', kind: 'image' }
+      }
+    )
+    expect(sb.scenes.map((s) => [s.template, s.asset])).toEqual([
+      ['footage', 'app-asset://file/aaaaaaaaaaaaaaaa.mp4'],
+      ['feature', undefined],
+      ['feature', undefined],
+      ['screenshot', 'u']
+    ])
+  })
+})
+
+describe('placeMedia', () => {
+  it('gives every unused image or clip a scene, never the opening hook', () => {
+    const out = placeMedia(
+      [
+        scene({ template: 'title' }),
+        scene({ template: 'feature' }),
+        scene({ template: 'text' }),
+        scene({ template: 'feature', asset: 'img1' })
+      ],
+      {
+        img1: { url: 'a', kind: 'image' },
+        img2: { url: 'b', kind: 'image' },
+        vid1: { url: 'c', kind: 'video' }
+      },
+      { img2: 'brand-logo.png' }
+    )
+    expect(out.map((s) => [s.template, s.asset])).toEqual([
+      ['title', undefined],
+      ['logo', 'img2'],
+      ['footage', 'vid1'],
+      ['screenshot', 'img1']
+    ])
+  })
+})
+
+describe('placeMedia with bad labels', () => {
+  it("fills the model's own empty media scenes when it misspells a label", () => {
+    const out = placeMedia(
+      [
+        scene({ template: 'title' }),
+        scene({ template: 'footage', asset: 'video1' }),
+        scene({ template: 'list' })
+      ],
+      { vid1: { url: 'c', kind: 'video' } }
+    )
+    expect(out.map((s) => [s.template, s.asset])).toEqual([
+      ['title', undefined],
+      ['footage', 'vid1'],
+      ['list', undefined]
+    ])
   })
 })
 

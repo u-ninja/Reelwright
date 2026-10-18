@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMotionValue } from 'motion/react'
-import { ArrowUp, Plus } from 'lucide-react'
+import { ArrowUp, FileText, Film, Paperclip, Plus, X } from 'lucide-react'
 import { Player } from './player/Player'
 import { Preview } from './Preview'
 import { Chip } from './components/Chip'
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
   GenerateRequest as Request,
+  type Attachment,
   type GenerateRequest,
   type Storyboard,
   Storyboard as Schema,
@@ -50,7 +51,7 @@ function VideoCard({ sb, onOpen }: { sb: Storyboard; onOpen: () => void }): Reac
 function App(): React.JSX.Element {
   // shortcut: one chat kept in memory; saved chats, memory and follow-up edits arrive in milestone 8.
   const [msgs, setMsgs] = useState<Msg[]>([])
-  const [opts, setOpts] = useState<Omit<GenerateRequest, 'text'>>({
+  const [opts, setOpts] = useState<Omit<GenerateRequest, 'text' | 'attachments'>>({
     kind: 'launch',
     tone: 'default',
     format: 'landscape',
@@ -58,31 +59,65 @@ function App(): React.JSX.Element {
     music: true
   })
   const [text, setText] = useState('')
+  const [atts, setAtts] = useState<Attachment[]>([])
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState<number | null>(null)
   const latest = msgs.findLast((m) => m.role === 'assistant')
   const opened = open === null ? undefined : msgs[open]
 
+  const fail = (e: unknown): void =>
+    setMsgs((m) => [
+      ...m,
+      {
+        role: 'error',
+        text: String(e).replace(/^Error: Error invoking remote method '\w+': (Error: )?/, '')
+      }
+    ])
+  const added = (list: Attachment[]): void =>
+    setAtts((a) => [...a, ...list.filter((x) => !a.some((y) => y.id === x.id))].slice(0, 10))
+
+  // Dropped/pasted files: send the real path when there is one, raw bytes for pasted screenshots.
+  const addFiles = async (files: File[]): Promise<void> => {
+    for (const f of files) {
+      const path = window.api.pathForFile(f)
+      try {
+        added([
+          await window.electron.ipcRenderer.invoke(
+            'attach',
+            path
+              ? { name: f.name, path }
+              : { name: f.name || 'pasted.png', data: new Uint8Array(await f.arrayBuffer()) }
+          )
+        ])
+      } catch (e) {
+        fail(e)
+      }
+    }
+  }
+  const pick = async (): Promise<void> => {
+    const res: PromiseSettledResult<Attachment>[] =
+      await window.electron.ipcRenderer.invoke('pickFiles')
+    added(res.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : [])))
+    res.forEach((r) => r.status === 'rejected' && fail(r.reason))
+  }
+
   const send = async (): Promise<void> => {
     const t = text.trim()
     if (!t || busy) return
-    setMsgs((m) => [...m, { role: 'user', text: t }])
+    const files = atts.length ? `\n📎 ${atts.map((a) => a.name).join(', ')}` : ''
+    setMsgs((m) => [...m, { role: 'user', text: t + files }])
     setText('')
+    setAtts([])
     setBusy(true)
     try {
       const sb: Storyboard = await window.electron.ipcRenderer.invoke('generate', {
         ...opts,
-        text: t
+        text: t,
+        attachments: atts.map((a) => a.id)
       })
       setMsgs((m) => [...m, { role: 'assistant', sb }])
     } catch (e) {
-      setMsgs((m) => [
-        ...m,
-        {
-          role: 'error',
-          text: String(e).replace(/^Error: Error invoking remote method 'generate': /, '')
-        }
-      ])
+      fail(e)
     } finally {
       setBusy(false)
     }
@@ -140,7 +175,44 @@ function App(): React.JSX.Element {
         <form
           className="m-4 mt-0 flex flex-col gap-2 rounded-2xl border bg-card p-2"
           onSubmit={(e) => (e.preventDefault(), send())}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => (e.preventDefault(), addFiles([...e.dataTransfer.files]))}
         >
+          {atts.length > 0 && (
+            <ul className="flex flex-wrap gap-2 px-1 pt-1" aria-label="Attachments">
+              {atts.map((a) => (
+                <li
+                  key={a.id}
+                  className="flex items-center gap-2 rounded-lg bg-secondary py-1 pr-1 pl-1 text-sm"
+                >
+                  {a.kind === 'image' ? (
+                    <img src={a.url} alt="" className="size-8 rounded object-cover" />
+                  ) : (
+                    <span className="grid size-8 place-items-center rounded bg-background text-muted-foreground">
+                      {a.kind === 'video' ? (
+                        <Film className="size-4" />
+                      ) : (
+                        <FileText className="size-4" />
+                      )}
+                    </span>
+                  )}
+                  <span className="max-w-40 truncate" title={a.info}>
+                    {a.name}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-6"
+                    aria-label={`Remove ${a.name}`}
+                    onClick={() => setAtts((l) => l.filter((x) => x.id !== a.id))}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
           <Textarea
             aria-label="Message"
             placeholder="Describe a video…"
@@ -148,8 +220,24 @@ function App(): React.JSX.Element {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send())}
+            onPaste={(e) => {
+              if (e.clipboardData.files.length) {
+                e.preventDefault()
+                addFiles([...e.clipboardData.files])
+              }
+            }}
           />
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              aria-label="Attach images, video or documents"
+              onClick={pick}
+            >
+              <Paperclip />
+            </Button>
             <Chip
               label="Kind"
               value={opts.kind}

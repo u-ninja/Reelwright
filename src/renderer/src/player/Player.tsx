@@ -10,7 +10,18 @@ import {
 } from 'motion/react'
 import { type Storyboard, FORMATS, duration } from '../../../shared/schema'
 import { type Local, LocalCtx, useLocal } from './context'
-import { Backdrop, Bar, CountUp, Grain, Hud, In, Kicker, Kinetic, Terminal } from './motion'
+import {
+  Backdrop,
+  Bar,
+  CountUp,
+  Footage,
+  Grain,
+  Hud,
+  In,
+  Kicker,
+  Kinetic,
+  Terminal
+} from './motion'
 
 const Img = ({ src, className }: { src?: string; className: string }): React.JSX.Element | null =>
   src ? <img src={src} alt="" className={className} /> : null
@@ -129,6 +140,23 @@ function Template(): React.JSX.Element {
       return (
         <div className={center}>
           <Terminal title={s.headline} lines={s.items ?? []} />
+        </div>
+      )
+    case 'footage':
+      // text sits on the clip, so it is always light on a dark gradient whatever the palette
+      return (
+        <div className="relative h-full">
+          {s.asset && <Footage src={s.asset} />}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 flex flex-col gap-[2cqmin] p-[8cqmin] text-white">
+            <Kicker text={s.kicker} />
+            <Kinetic text={s.headline} className={`text-[8cqmin] ${HEAD}`} />
+            {s.sub && (
+              <In i={2} className="text-[4.5cqmin] opacity-80">
+                {s.sub}
+              </In>
+            )}
+          </div>
         </div>
       )
     case 'screenshot':
@@ -288,6 +316,18 @@ export function Player({
   )
 }
 
+// Resolves once a video has a decoded frame at its current seek position (or after 3s, so a bad file can't hang a render).
+const videoReady = (v: HTMLVideoElement): Promise<unknown> =>
+  Promise.race([
+    new Promise((r) => {
+      const check = (): void => void (v.readyState >= 2 && !v.seeking && r(null))
+      v.addEventListener('seeked', check)
+      v.addEventListener('loadeddata', check)
+      check()
+    }),
+    new Promise((r) => setTimeout(r, 3000))
+  ])
+
 declare global {
   interface Window {
     __load: (sb: Storyboard) => void
@@ -305,6 +345,8 @@ export function RenderRoot(): React.JSX.Element | null {
       flushSync(() => time.set(t))
       await document.fonts.ready
       await Promise.all([...document.images].map((img) => img.decode().catch(() => {})))
+      await new Promise((r) => requestAnimationFrame(r))
+      await Promise.all([...document.querySelectorAll('video')].map(videoReady))
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
     }
   }, [time])

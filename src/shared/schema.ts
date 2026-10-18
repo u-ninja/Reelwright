@@ -12,6 +12,7 @@ export const Scene = z.object({
     'list',
     'step',
     'code',
+    'footage',
     'logo',
     'cta',
     'custom'
@@ -22,7 +23,7 @@ export const Scene = z.object({
   kicker: z.string().optional(), // small mono label above the headline
   sub: z.string().optional(),
   items: z.array(z.string()).optional(),
-  asset: z.string().optional(), // shortcut: an image URL for now, becomes a key into brief assets in milestone 4
+  asset: z.string().optional(), // image or video URL (app-asset://… for attachments, data: for built-ins)
   transitionIn: z.enum(['fade', 'slide', 'wipe', 'zoom', 'cut']),
   bg: z.enum(['base', 'accent', 'inverse']).optional(), // full-bleed color flip for this scene
   voiceover: z.string().optional(), // narration for this scene; adds to the on-screen text, never contradicts it
@@ -62,6 +63,15 @@ export const FORMATS = {
 
 export const duration = (sb: Storyboard): number => sb.scenes.reduce((a, s) => a + s.durationSec, 0)
 
+export type Attachment = {
+  id: string // content hash
+  name: string
+  kind: 'image' | 'video' | 'doc'
+  url: string // app-asset://file/<id>.<ext>
+  info: string // one line for the AI, e.g. "image 1920x1080", "video 12.3s"
+  text?: string // extracted document text
+}
+
 // Start time of every scene, in seconds.
 export const sceneStarts = (sb: Storyboard): number[] =>
   sb.scenes.map((_, i) => sb.scenes.slice(0, i).reduce((a, s) => a + s.durationSec, 0))
@@ -71,8 +81,22 @@ export const VO_LEAD = 0.3
 export const VO_TAIL = 0.5
 
 // What the AI writes. Kind/tone/format come from the user; asset templates wait for attachments (milestone 4a).
-export const AiScene = Scene.omit({ asset: true, section: true }).extend({
-  template: z.enum(['title', 'text', 'feature', 'stat', 'quote', 'list', 'step', 'code', 'cta'])
+// asset is an attachment label like "img1" / "vid1" here; finalize maps it to the real URL.
+export const AiScene = Scene.omit({ section: true }).extend({
+  template: z.enum([
+    'title',
+    'text',
+    'feature',
+    'stat',
+    'quote',
+    'list',
+    'step',
+    'code',
+    'cta',
+    'logo',
+    'screenshot',
+    'footage'
+  ])
 })
 export const AiStoryboard = z.object({
   title: z.string(),
@@ -95,6 +119,10 @@ export const GenerateRequest = z.object({
   voice: z
     .enum(['af_heart', 'af_bella', 'am_michael', 'am_fenrir', 'bf_emma', 'bm_george'])
     .optional(),
-  music: z.boolean()
+  music: z.boolean(),
+  attachments: z
+    .array(z.string().regex(/^[a-f0-9]{16}$/))
+    .max(10)
+    .default([])
 })
 export type GenerateRequest = z.infer<typeof GenerateRequest>

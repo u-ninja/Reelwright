@@ -5,4 +5,4 @@ out
 .eslintcache
 *.log*
 .playwright-mcp
-brag-output/
+brag-output*/

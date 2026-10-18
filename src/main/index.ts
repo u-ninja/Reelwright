@@ -1,4 +1,5 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, dialog, ipcMain, protocol } from 'electron'
+import { z } from 'zod'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
 import { spawn } from 'child_process'
@@ -6,6 +7,7 @@ import { once } from 'events'
 import { FORMATS, GenerateRequest, Storyboard, duration } from '../shared/schema'
 import { generate } from './generate'
 import { FFMPEG, soundtrack } from './audio'
+import { attach, serveAsset } from './attachments'
 import { demo } from '../shared/demo'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -27,6 +29,9 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
   })
+
+  // a file dropped on the window must never replace the app
+  mainWindow.webContents.on('will-navigate', (e) => e.preventDefault())
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -116,6 +121,20 @@ async function render(input: unknown): Promise<string> {
   }
 }
 
+// Attachments are served read-only from the asset store; stream lets <video> seek with range requests.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app-asset',
+    privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true }
+  }
+])
+
+const AttachInput = z.object({
+  name: z.string().min(1).max(255),
+  path: z.string().optional(),
+  data: z.instanceof(Uint8Array).optional()
+})
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -131,36 +150,76 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('render', (_, sb) => render(sb))
+  protocol.handle('app-asset', serveAsset)
+  ipcMain.handle('attach', (_, input) => attach(AttachInput.parse(input)))
+  ipcMain.handle('pickFiles', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)!
+    const r = await dialog.showOpenDialog(win, {
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        {
+          name: 'Images, video, documents',
+          extensions: [
+            'png',
+            'jpg',
+            'jpeg',
+            'webp',
+            'gif',
+            'svg',
+            'mp4',
+            'mov',
+            'webm',
+            'm4v',
+            'pdf',
+            'docx',
+            'txt',
+            'md',
+            'csv',
+            'json'
+          ]
+        }
+      ]
+    })
+    return Promise.allSettled(
+      r.filePaths.map((path) => attach({ name: path.split('/').pop()!, path }))
+    )
+  })
   ipcMain.handle('generate', (_, req) => generate(GenerateRequest.parse(req)))
   ipcMain.handle('soundtrack', async (_, sb) => {
     const path = await soundtrack(Storyboard.parse(sb))
     return path && readFile(path)
   })
 
-  // LR_RENDER=landscape|vertical|square pnpm dev → render the demo, print the path, quit (smoke test).
-  // Add LR_PROMPT="..." (and LR_KIND=explainer) to generate the storyboard with Ollama first; LR_TONE, LR_DURATION, LR_VOICE (e.g. af_heart) and LR_MUSIC=0 set tone, length, narration and music.
+  // Smoke test: LR_RENDER=landscape|vertical|square pnpm dev renders the demo, prints the path, quits.
+  // LR_PROMPT="..." generates with Ollama first; LR_KIND, LR_TONE, LR_DURATION, LR_VOICE (e.g. af_heart),
+  // LR_MUSIC=0 and LR_ATTACH=/path/a.png,/path/b.mov set kind, tone, length, narration, music, attachments.
   const format = process.env['LR_RENDER']
   if (format) {
-    const text = process.env['LR_PROMPT']
-    const kind = process.env['LR_KIND'] ?? 'launch'
-    ;(text
-      ? generate(
-          GenerateRequest.parse({
-            text,
-            kind,
-            format,
-            tone: process.env['LR_TONE'] ?? 'default',
-            duration: +(process.env['LR_DURATION'] ?? 20),
-            voice: process.env['LR_VOICE'],
-            music: process.env['LR_MUSIC'] !== '0'
-          })
-        )
-      : Promise.resolve(demo)
-    )
+    const env = process.env
+    const smoke = async (): Promise<Storyboard> => {
+      if (!env['LR_PROMPT']) return demo
+      const files = (env['LR_ATTACH'] ?? '').split(',').filter(Boolean)
+      const atts = await Promise.all(
+        files.map((path) => attach({ name: path.split('/').pop()!, path }))
+      )
+      return generate(
+        GenerateRequest.parse({
+          text: env['LR_PROMPT'],
+          kind: env['LR_KIND'] ?? 'launch',
+          format,
+          tone: env['LR_TONE'] ?? 'default',
+          duration: +(env['LR_DURATION'] ?? 20),
+          voice: env['LR_VOICE'],
+          music: env['LR_MUSIC'] !== '0',
+          attachments: atts.map((a) => a.id)
+        })
+      )
+    }
+    smoke()
       .then(
         (sb) => (
           console.log(JSON.stringify(sb, null, 1)),
-          render({ ...sb, format, tone: process.env['LR_TONE'] ?? sb.tone })
+          render({ ...sb, format, tone: env['LR_TONE'] ?? sb.tone })
         )
       )
       .then(console.log, console.error)

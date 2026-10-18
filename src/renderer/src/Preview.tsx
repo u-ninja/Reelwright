@@ -34,9 +34,11 @@ export function Preview({
   useEffect(() => {
     let url: string | undefined
     let alive = true
-    window.electron.ipcRenderer.invoke('soundtrack', sb).then((d: Uint8Array<ArrayBuffer> | null) => {
-      if (alive && d) setSrc((url = URL.createObjectURL(new Blob([d], { type: 'audio/mp4' }))))
-    })
+    window.electron.ipcRenderer
+      .invoke('soundtrack', sb)
+      .then((d: Uint8Array<ArrayBuffer> | null) => {
+        if (alive && d) setSrc((url = URL.createObjectURL(new Blob([d], { type: 'audio/mp4' }))))
+      })
     return () => {
       alive = false
       if (url) URL.revokeObjectURL(url)

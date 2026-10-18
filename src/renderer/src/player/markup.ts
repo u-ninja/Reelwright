@@ -3,6 +3,7 @@ export type Word = {
   mark: 'plain' | 'accent' | 'highlight'
   delay: number
   seg: number
+  glue?: boolean // no space before this word ("*core*." → "core" + ".")
 }
 
 // "your site,\nnow a *launch video.*" → lines of words with their style and start time.
@@ -10,18 +11,31 @@ export type Word = {
 export function parseMarkup(text: string, start: number, gap: number, lineGap: number): Word[][] {
   let n = 0
   let seg = 0
-  return text.split('\n').map((line, k) =>
-    line.split(/(\*[^*]+\*|==[^=]+==)/).flatMap((part) => {
+  return text.split('\n').map((line, k) => {
+    let prev = ''
+    return line.split(/(\*[^*]+\*|==[^=]+==)/).flatMap((part, p) => {
       const mark = part.startsWith('==') ? 'highlight' : part.startsWith('*') ? 'accent' : 'plain'
       const body =
         mark === 'highlight' ? part.slice(2, -2) : mark === 'accent' ? part.slice(1, -1) : part
+      // a part touching the previous one with no space continues its word
+      const glue = p > 0 && !/\s$/.test(prev) && !/^\s/.test(part)
+      prev = part
       seg++
       return body
         .split(' ')
         .filter(Boolean)
-        .map((w) => ({ text: w, mark, seg, delay: start + k * lineGap + n++ * gap }) as Word)
+        .map(
+          (w, j) =>
+            ({
+              text: w,
+              mark,
+              seg,
+              glue: glue && j === 0,
+              delay: start + k * lineGap + n++ * gap
+            }) as Word
+        )
     })
-  )
+  })
 }
 
 export const plainText = (text: string): string => text.replace(/\*|==/g, '').replace(/\n/g, ' ')

@@ -1,8 +1,11 @@
-import { contextBridge } from 'electron'
+import { contextBridge, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer
-const api = {}
+const api = {
+  // Electron no longer exposes File.path; this gives the real path of a dropped file ('' for pasted data).
+  pathForFile: (file: File): string => webUtils.getPathForFile(file)
+}
 
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise
